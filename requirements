@@ -1,0 +1,19 @@
+[vlan]
+# Just the name of the vlan
+computer-lab
+printers
+VOIP
+public
+
+[ip helper-address]
+# vlan-name:addr1,addr2,addrX
+computer-lab:10.10.10.10,15.15.15.15
+public:20.20.20.20,25.25.25.25
+
+[vrf]
+# vlan-name:vrf-name
+computer-lab:internal_VRF
+public:external_VRF
+
+[bad-addresses]
+101.101.101.101

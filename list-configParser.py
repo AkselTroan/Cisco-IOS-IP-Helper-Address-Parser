@@ -20,12 +20,16 @@ class SVI:
     # IPHelperAddr is a list of ip helper-address that the SVI has
     def __init__(self, hostname, interfaceName):
         self.hostname = hostname
+        self.vrf = ""
         self.interfaceName = "interface " + interfaceName
         self.IPHelperAddr = []
     
     def addIPHelperAddr(self, addr):
         self.IPHelperAddr.append(addr)
 
+
+    def setVRF(self, vrf):
+        self.vrf = vrf
 
 
 def initArgParser():
@@ -113,8 +117,13 @@ def interpretTemplateConfig(parse):
                 pass
             else:
                 # Found a IP Helper Address
-                #all_addr.append(ip_helper_addr)
                 svi.addIPHelperAddr(ip_helper_addr)
+            
+            vrf = child.re_match_typed(
+            r'vrf\sforwarding\s+(\S+)', result_type=str, default='__no_vrf__'
+            )
+            svi.setVRF(vrf)
+            
         template_SVIs.append(svi)
 
     return template_SVIs
@@ -131,7 +140,7 @@ def interpretRunningConfig(parse):
         intf_name = intf_obj.re_match_typed('^interface\s+(\S.+?)$')
         svi = SVI(hostname, intf_name) # Declaring a SVI object
 
-
+        stop = False
         # Iterate all children on the interface and check if it is a helper-addresse
         for child in intf_obj.children:
             ip_helper_addr = child.re_match_typed(
@@ -142,6 +151,21 @@ def interpretRunningConfig(parse):
             else:
                 # Found a IP Helper Address
                 svi.addIPHelperAddr(ip_helper_addr)
+            
+            # Find VRF
+            vrf = child.re_match_typed(
+                r'vrf\sforwarding\s+(\S+)', result_type=str, default='__no_vrf__'
+                )
+            
+            if vrf != "__no_vrf__" and stop is False:
+                svi.setVRF(vrf)
+                stop = True
+        
+        # Did not find any VRF on the SVI
+        if stop is False:
+            svi.setVRF("No VRF")
+            
+
         running_SVIs.append(svi)
     print("Done!\n")
     return running_SVIs
@@ -278,7 +302,6 @@ def compareConfigs_csv_report(template, running, bad_addresses):
     # [ Hostname, SVI, Missing IPHA, Status]
     # ['Router-1', 'interface Vlan100', '"192.10.1.2, 10.91.3.65", 'Missing IPHA']
     
-    #print("\nComparing the template with the running config")
     for svi in template:
         missing_IPHA = []
         temp_missing_svi = []
@@ -287,15 +310,14 @@ def compareConfigs_csv_report(template, running, bad_addresses):
         data = []
         data.append(running_hostname)
         data.append(svi.interfaceName)
+        
         # Check if the Vlan is in the running config:
         # If yes where is it located in the object list, and then check the IP helper addresses
         if svi.interfaceName in running_intfName:
             k = 0
             for name in running_intfName:
                 if svi.interfaceName == running_intfName[k]:
-                    #print(colors.BOLD + colors.GREEN + "Found SVI: " + name + colors.ENDC)
-                    temp_ind = template_indexes[name]
-                    running_ind = running_indexes[name]
+                    data.append(running[k].vrf)
                     
                     # svi.IPHelperAddr and running[k].IPHelperAddr is the correct interfaces
                     for helper in  svi.IPHelperAddr:
@@ -304,12 +326,9 @@ def compareConfigs_csv_report(template, running, bad_addresses):
                         if helper in running[k].IPHelperAddr:
                             for helper2 in running[k].IPHelperAddr:
                                 if helper == helper2:
-                                    #print(colors.GREEN + "Found IP Helper Address: " + helper + colors.ENDC)
                                     pass
 
                         else:
-                            #print(colors.FAIL + "Could not find address: " + helper + colors.ENDC)
-                            #print(missing_IPHA)
                             missing_IPHA.append(str(helper))
                     k += 1
                 else:
@@ -347,7 +366,6 @@ def compareConfigs_csv_report(template, running, bad_addresses):
 
 def main():
 
-    pars_running = True
 
     # Fetch and validate arguments
     template_path, running_path = initArgParser()
@@ -360,7 +378,7 @@ def main():
     template_SVIs = interpretTemplateConfig(template_parser)
 
     # Create file
-    header = ['Hostname', 'SVI', 'Missing IPHA', 'Remove Address', 'Status']
+    header = ['Hostname', 'SVI', 'VRF', 'Missing IPHA', 'Remove Address', 'Status']
     with open('results.csv', 'w', encoding='UTF8', newline='') as f:
         writer = csv.writer(f)
 
@@ -373,7 +391,6 @@ def main():
     bad_addresses = read_bad_addresses()
 
     for config in running_configs:
-        #print(config)
         # Parse the running config file
         parser = readConfigFile(config)
         running_SVIs = interpretRunningConfig(parser)
