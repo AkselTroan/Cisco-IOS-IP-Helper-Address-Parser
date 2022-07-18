@@ -6,12 +6,6 @@ VOIP
 public
 lobby
 
-[ip helper-address]
-# vlan-name:addr1,addr2,addrX
-computer-lab:10.10.10.10,15.15.15.15
-public:20.20.20.20,25.25.25.25
-lobby:30.30.30.30,35.35.35.35
-
 [vrf]
 # vlan-name:vrf-name
 computer-lab:Internal_VRF
@@ -19,6 +13,12 @@ public:External_VRF
 lobby:External_VRF
 printers:Internal_VRF
 VOIP:Voice_VRF
+
+[ip helper-address]
+# vlan-name:addr1,addr2,addrX
+computer-lab:10.10.10.10,15.15.15.15
+public:20.20.20.20,25.25.25.25
+lobby:30.30.30.30,35.35.35.35
 
 [bad-addresses]
 101.101.101.101

@@ -1,3 +1,4 @@
+
 from ciscoconfparse import CiscoConfParse
 import time, sys, os, csv
 
@@ -209,6 +210,7 @@ def interpretRunningConfig(parse):
         # If the current SVI ID Is in the regular vlan ID 
         if intf_name[4:] not in fin_vlanID: # If 200 in [100,200]
             print("Current SVI " + intf_name + " do not have a vlan with same ID. Skipping...")
+            # Should be reported!
         else:
             # Found correct SVI in correlation to L2 vlan
             svi = SVI(hostname, intf_name) # Declaring a SVI object
@@ -265,10 +267,6 @@ def analyseConfig(req, host):
             missing_vlan_names.append(name)
 
 
-    # Check SVI IPHA
-#    for svi in host.SVIs:
-#        if svi.interfaceName[4:] in req.vlanIDs:
-#            pass
 
     wrong_vrf = []
     correct_vrf = []
@@ -278,45 +276,61 @@ def analyseConfig(req, host):
     for vrf in req.vrfs:
         for svi in host.SVIs:
             if vrf[0] != svi.vrf[0]:
-                print("Could not find correct Vlan" + " " + str(vrf[0]) + " " + str(svi.vrf[0]))
+                #print("Could not find correct Vlan" + " " + str(vrf[0]) + " " + str(svi.vrf[0]))
                 wrong_vlan.append(vrf[0])
             else:
-                print("Found Correct Vlan: "  + str(vrf[0]) + " " + str(svi.vrf[0]))
+                #print("Found Correct Vlan: "  + str(vrf[0]) + " " + str(svi.vrf[0]))
                 correct_vlan.append(vrf[0])
     
             if vrf[1] != svi.vrf[1]:
-                print("Could not find correct VRF" + " " + str(vrf[1]) + " " + str(svi.vrf[1]))
-                wrong_vrf.append(vrf[1])
+                #print("Could not find correct VRF" + " " + str(vrf[1]) + " " + str(svi.vrf[1]))
+                wrong_vrf.append(svi.vrf[1])
             else:
-                print("Found Correct VRF: "  + str(vrf[1]) + " " + str(svi.vrf[1]))
+                #print("Found Correct VRF: "  + str(vrf[1]) + " " + str(svi.vrf[1]))
                 correct_vrf.append(vrf[1])
-                
-    print("First loop")
-    for vrf in wrong_vrf:
-        print(vrf)
+            
+                # Correct combination
+            for req_ipha in req.ipha:
+                for run_ipha in svi.IPHelperAddr:
+                    #print(str(req.ipha[1]) + " " + run_ipha)
+                    if req_ipha[0] == svi.vrf[1]:
+                        #print(req.ipha[1] + " " + run_ipha)
+                        for addr in req.ipha[1]:
+                            print(str(addr) + " " + str(run_ipha))
+                            if str(addr) in run_ipha:
+                                print(str(addr) + " " + str(run_ipha))
+                                print("Success")
+
 
     for vrf in wrong_vrf:
         for cvrf in correct_vrf:
 
             if vrf == cvrf:
-            # remove vrf from the wronf vrf list
-                del wrong_vrf[wrong_vrf.index(vrf)]
-
+            # remove vrf from the wrong vrf list
+                try:
+                    del wrong_vrf[wrong_vrf.index(vrf)]
+                except:
+                    pass
     
     # Remove duplicates
     tmp = []
     [tmp.append(x) for x in wrong_vrf if x not in tmp]
     wrong_vrf = tmp
     
-    print("These are the missing vlans and vrfs")
-    for vrf in wrong_vrf:
-        print(vrf)
-    
-    
+    print("")
+    print("Misconfigured correlation between vlans and vrfs") 
+    for i in range(len(wrong_vrf)):
+        print("Vlan " + wrong_vlan[i] + " Has wrong vrf (" + wrong_vrf[i] + ")")
+
     
     # Check bad-addresses
 
+    for ba in req.badAddresses:
+        for svi in host.SVIs:
 
+            if ba in svi.IPHelperAddr:
+                print("Found bad address: " + ba)
+                # Should be reported
 
     # We now have a list of all interfaceNames and the index that they are located at the global SVI object list
     
@@ -357,9 +371,12 @@ def main():
     vlan, ipha, vrf, badAddresses = interpretRequirements(req_path)
     req = requirements(vlan, ipha, vrf, badAddresses)
 
-    parser = readConfigFile(running_path)
-    host = interpretRunningConfig(parser)
-    analyseConfig(req, host)
+    running_configs = read_list(running_path)
+    for config in running_configs:
+
+        parser = readConfigFile(config)
+        host = interpretRunningConfig(parser)
+        analyseConfig(req, host)
         # How do we find the correlation between vlans and SVIs.
         # We know that they can existst, however how do we make the link between them. 
 
