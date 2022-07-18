@@ -1,6 +1,8 @@
 from ciscoconfparse import CiscoConfParse
 import time, sys, os, csv
 
+from pkg_resources import working_set
+
 
 class colors:
     HEADER = '\033[95m'
@@ -17,9 +19,9 @@ class colors:
 class Host:
 
     def __init__(self, hostname, vlanIDs, vlanNames, SVIs):
-        self.hostname = hostname
-        self.vlanIDs = vlanIDs
-        self.vlanNames = vlanNames
+        self.hostname = hostname # String
+        self.vlanIDs = vlanIDs # List of integers
+        self.vlanNames = vlanNames # List of strings
         self.SVIs = SVIs # List of SVI objects
 
 
@@ -100,7 +102,7 @@ def interpretRequirements(file):
             break
 
         if line[0] == "#":
-            print("Found a comment. Skipping...")
+            pass
         
         else:
         
@@ -138,10 +140,16 @@ def interpretRequirements(file):
                 vlans.append(line.strip())
         
             elif ipha_read and line.strip()[0] != "[":
-                ipha.append(line.strip())
+                line = line.strip()
+                line = line.split(":")
+                addr_list = line[1].split(",")
+                line[1] = addr_list
+                ipha.append(line)
         
             elif vrf_read and line.strip()[0] != "[":
-                vrf.append(line.strip())
+                line = line.strip()
+                line = line.split(":")
+                vrf.append(line)
             
             elif badAddr_read and line.strip()[0] != "[":
                 badAddr.append(line.strip())
@@ -183,126 +191,135 @@ def interpretRunningConfig(parse):
 
     for vlan in parse.find_objects('^vlan'): # Find vlan name 
         vlanID = vlan.re_match_typed(r"^vlan\s+(\S.+?)$", result_type=str)
-        print("Vlan " + vlanID) # Vlan 300
+        # vlanID: 300
         fin_vlanID.append(vlanID)
         for child in vlan.children:
             name = child.re_match_typed(r"\sname\s+(\S.+?)$", result_type=str)
-            print("name: " + name) # name: computer-lab
+            # name: computer-lab
             fin_vlanNames.append(name)
 
     # Display the vlan id and vlan name (L2)
-    for i in range(len(fin_vlanID)):
-        print("id: " + fin_vlanID[i] + " " + fin_vlanNames[i])
+    #for i in range(len(fin_vlanID)):
+    #    print("id: " + fin_vlanID[i] + " " + fin_vlanNames[i])
 
     # Checks for Switch Virtual Interfaces
     for intf_obj in parse.find_objects('^interface Vlan'):  # Find all every parent which starts with interface vlan.
         intf_name = intf_obj.re_match_typed('^interface\s+(\S.+?)$')
         
         # If the current SVI ID Is in the regular vlan ID 
-        if intf_name[4:] in fin_vlanID: # If 200 in [100,200]
-            print(intf_name[4:])
-            print("Found correct SVI in correlation to L2 vlan")
+        if intf_name[4:] not in fin_vlanID: # If 200 in [100,200]
+            print("Current SVI " + intf_name + " do not have a vlan with same ID. Skipping...")
         else:
-            print("Current SVI " + intf_name + " do not have a vlan with same ID")
+            # Found correct SVI in correlation to L2 vlan
+            svi = SVI(hostname, intf_name) # Declaring a SVI object
 
-        svi = SVI(hostname, intf_name) # Declaring a SVI object
+            stop = False
+            # Iterate all children on the interface and check if it is a helper-addresse
+            for child in intf_obj.children:
+                ip_helper_addr = child.re_match_typed(
+                r'ip\shelper-address\s(\d+\.\d+\.\d+\.\d+)', result_type=str, default='__no_match__')
+                
+                if ip_helper_addr == "__no_match__":  # If the read child is not ip helper-address
+                    pass
+                else:
+                    # Found a IP Helper Address
+                    svi.addIPHelperAddr(ip_helper_addr)
+                
+                # Find VRF
+                vrf = child.re_match_typed(
+                    r'vrf\sforwarding\s+(\S+)', result_type=str, default='__no_vrf__'
+                    )
+                
+                if vrf != "__no_vrf__" and stop is False:
+                    for i in range(len(fin_vlanID)):
+                        if intf_name[4:] == fin_vlanID[i]:
+                            current_vlan = fin_vlanNames[i]
+                    final = []
+                    final.append(current_vlan)
+                    final.append(vrf)
+                    svi.setVRF(final)
+                    stop = True
+            
+            # Did not find any VRF on the SVI
+            if stop is False:
+                svi.setVRF("No VRF")
+                
 
-        stop = False
-        # Iterate all children on the interface and check if it is a helper-addresse
-        for child in intf_obj.children:
-            ip_helper_addr = child.re_match_typed(
-            r'ip\shelper-address\s(\d+\.\d+\.\d+\.\d+)', result_type=str, default='__no_match__')
-            
-            if ip_helper_addr == "__no_match__":  # If the read child is not ip helper-address
-                pass
-            else:
-                # Found a IP Helper Address
-                svi.addIPHelperAddr(ip_helper_addr)
-            
-            # Find VRF
-            vrf = child.re_match_typed(
-                r'vrf\sforwarding\s+(\S+)', result_type=str, default='__no_vrf__'
-                )
-            
-            if vrf != "__no_vrf__" and stop is False:
-                svi.setVRF(vrf)
-                stop = True
-        
-        # Did not find any VRF on the SVI
-        if stop is False:
-            svi.setVRF("No VRF")
-            
+            running_SVIs.append(svi)
 
-        running_SVIs.append(svi)
+    # Make a new host object (Remember to add the SVIs to the host along with hostname and vlans)
+    host = Host(hostname, fin_vlanID, fin_vlanNames, running_SVIs)
     print("Done!\n")
-    return running_SVIs
+    return host
 
 
 
-def analyseConfigs(req, running):
+def analyseConfig(req, host):
     
-    running_intfName = [] # The name will be stored in the order they are presented in the config
-    running_indexes = {}
-    j = 0
-    running_hostname = ""
-    for svi in running:
-        running_intfName.append(svi.interfaceName)
-        running_indexes[svi.interfaceName] = j
-        j += 1
-        running_hostname = svi.hostname
-        
+    missing_vlan_names = []
+    
+    # Checking for missing vlan names
+    for name in req.vlans:
+        if name not in host.vlanNames:
+            print("Missing VLAN: " + name)
+            missing_vlan_names.append(name)
+
+
+    # Check SVI IPHA
+#    for svi in host.SVIs:
+#        if svi.interfaceName[4:] in req.vlanIDs:
+#            pass
+
+    wrong_vrf = []
+    correct_vrf = []
+    wrong_vlan = []
+    correct_vlan = []
+    # Check VRF
+    for vrf in req.vrfs:
+        for svi in host.SVIs:
+            if vrf[0] != svi.vrf[0]:
+                print("Could not find correct Vlan" + " " + str(vrf[0]) + " " + str(svi.vrf[0]))
+                wrong_vlan.append(vrf[0])
+            else:
+                print("Found Correct Vlan: "  + str(vrf[0]) + " " + str(svi.vrf[0]))
+                correct_vlan.append(vrf[0])
+    
+            if vrf[1] != svi.vrf[1]:
+                print("Could not find correct VRF" + " " + str(vrf[1]) + " " + str(svi.vrf[1]))
+                wrong_vrf.append(vrf[1])
+            else:
+                print("Found Correct VRF: "  + str(vrf[1]) + " " + str(svi.vrf[1]))
+                correct_vrf.append(vrf[1])
+                
+    print("First loop")
+    for vrf in wrong_vrf:
+        print(vrf)
+
+    for vrf in wrong_vrf:
+        for cvrf in correct_vrf:
+
+            if vrf == cvrf:
+            # remove vrf from the wronf vrf list
+                del wrong_vrf[wrong_vrf.index(vrf)]
+
+    
+    # Remove duplicates
+    tmp = []
+    [tmp.append(x) for x in wrong_vrf if x not in tmp]
+    wrong_vrf = tmp
+    
+    print("These are the missing vlans and vrfs")
+    for vrf in wrong_vrf:
+        print(vrf)
+    
+    
+    
+    # Check bad-addresses
 
 
 
-    for svi in running:
-        pass
     # We now have a list of all interfaceNames and the index that they are located at the global SVI object list
     
-    # Check if the all the interface vlans are present. 
-    # Two loops are required. Check if all SVIs in the template are in the running config
-    # And all Vlans are in the template and report to the user the findings of interface Vlans runinng which is not in the template
-    
-    # [ Hostname, SVI, Missing IPHA, Status]
-    # ['Router-1', 'interface Vlan100', '"192.10.1.2, 10.91.3.65", 'Missing IPHA']
-    
-    #for svi in template:
-    #    missing_IPHA = []
-    #    temp_missing_svi = []
-    #    found_bad_addr = []
-        #print("\n")
-    #    data = []
-    #    data.append(running_hostname)
-    #    data.append(svi.interfaceName)
-        
-        # Check if the Vlan is in the running config:
-        # If yes where is it located in the object list, and then check the IP helper addresses
-    #    if svi.interfaceName in running_intfName:
-     #       k = 0
-    #        for name in running_intfName:
-    #            if svi.interfaceName == running_intfName[k]:
-    #                data.append(running[k].vrf)
-    #                
-    #                # svi.IPHelperAddr and running[k].IPHelperAddr is the correct interfaces
-    #                for helper in  svi.IPHelperAddr:
-    #                    if bad_addresses == running[k].IPHelperAddr:
-    #                        found_bad_addr.append(helper)
-    #                    if helper in running[k].IPHelperAddr:
-    #                        for helper2 in running[k].IPHelperAddr:
-    #                            if helper == helper2:
-    #                                pass
-
-    #                    else:
-     #                       missing_IPHA.append(str(helper))
-    #                k += 1
-    #            else:
-    #                k += 1
-    #    if svi.interfaceName not in running_intfName:
-    #        pass
-    #    else:
-    #        for svi in running:
-    #            for helper in svi.IPHelperAddr:
-    #                if helper in bad_addresses:
-    #                    found_bad_addr.append(helper)
     #        status = []
     #        if len(missing_IPHA) == 0:
     #            missing_IPHA = "None"
@@ -341,8 +358,12 @@ def main():
     req = requirements(vlan, ipha, vrf, badAddresses)
 
     parser = readConfigFile(running_path)
-    running = interpretRunningConfig(parser)
+    host = interpretRunningConfig(parser)
+    analyseConfig(req, host)
+        # How do we find the correlation between vlans and SVIs.
+        # We know that they can existst, however how do we make the link between them. 
 
+    
     # Create file
     #header = ['Hostname', 'SVI', 'VRF', 'Missing IPHA', 'Remove Address', 'Status']
     #with open('results.csv', 'w', encoding='UTF8', newline='') as f:
