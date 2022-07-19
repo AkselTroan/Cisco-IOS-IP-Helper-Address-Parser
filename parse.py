@@ -45,8 +45,10 @@ def main():
         di['VRF'] = di['VRF'] + vrf
         di['IPHA'] = di['IPHA'] + ipha
         di['Status'] = di['Status'] + status 
+
     test = pd.DataFrame(di)
 
+    test.to_excel("./test.xlsx", sheet_name="Javel")
     print(test)   #analyseConfig(req, host)
 
 

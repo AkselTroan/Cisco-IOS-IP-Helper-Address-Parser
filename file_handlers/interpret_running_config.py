@@ -31,7 +31,6 @@ def interpretRunningConfig(parse, bad_addr):
             vrf = child.re_match_typed(
                 r'vrf\sforwarding\s+(\S+)', result_type=str, default='__no_vrf__'
                 )
-            
             if vrf != "__no_vrf__" and stop is False:
                 stop = True
                 f_vrf = vrf
@@ -40,19 +39,15 @@ def interpretRunningConfig(parse, bad_addr):
                 a_hostname.append(hostname)
                 a_svi.append(intf_name)
                 a_ipha.append(ip_helper_addr)
-                a_vrf.append(f_vrf)
+                if stop is False:
+                    f_vrf = vrf
+                    a_vrf.append("No VRF")
+                else:
+                    a_vrf.append(f_vrf)
                 if ip_helper_addr in bad_addr:
                     a_status.append("Bad Address")
                 else:
                     a_status.append("Good Address")
-                
-        # Did not find any VRF on the SVI
-        if stop is False:
-            svi.setVRF("No VRF")
-            a_hostname.append(hostname)
-            a_svi.append(intf_name)
-            a_ipha.append(ip_helper_addr)
-            a_vrf.append("No VRF")
 
     return a_hostname, a_svi, a_vrf, a_ipha, a_status
 
