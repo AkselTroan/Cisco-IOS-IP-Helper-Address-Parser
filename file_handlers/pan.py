@@ -1,17 +1,31 @@
+from init.initArgParser import initArgParser
+from file_handlers.read_files import read_bad_addresses, readConfigFile, read_list
+from file_handlers.interpret_running_config import interpretRunningConfig
 import pandas as pd
 
-def coll():
-    return['Hostname', 'SVI', 'VRF', 'IPHA', 'Status']
-def test(hostname, svi ,vrf, ipha, status):
 
+def interpretAndSave():
 
-    di = {"Hostname": hostname,
-            "SVI": svi,
-            "VRF": vrf,
-            "IPHA": ipha,
-            "Status": status}
+    running_path = initArgParser()
+
+    di = {"Hostname": [],
+            "Interface": [],
+            "VRF": [],
+            "IPHA": [],
+            "Status": []}
+    running_configs = read_list(running_path)
+    for config in running_configs:
+
+        parser = readConfigFile(config)
+        hostname, svi ,vrf, ipha, status = interpretRunningConfig(parser, read_bad_addresses())
+        di['Hostname'] = di['Hostname'] + hostname
+        di['Interface'] = di['Interface'] + svi
+        di['VRF'] = di['VRF'] + vrf
+        di['IPHA'] = di['IPHA'] + ipha
+        di['Status'] = di['Status'] + status 
 
     test = pd.DataFrame(di)
 
+    test.to_excel("./test.xlsx", sheet_name="Javel")
     print(test)
 
