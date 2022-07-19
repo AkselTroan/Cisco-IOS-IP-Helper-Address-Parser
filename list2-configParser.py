@@ -287,20 +287,7 @@ def analyseConfig(req, host):
                 wrong_vrf.append(svi.vrf[1])
             else:
                 #print("Found Correct VRF: "  + str(vrf[1]) + " " + str(svi.vrf[1]))
-                correct_vrf.append(vrf[1])
-            
-                # Correct combination
-            for req_ipha in req.ipha:
-                for run_ipha in svi.IPHelperAddr:
-                    #print(str(req.ipha[1]) + " " + run_ipha)
-                    if req_ipha[0] == svi.vrf[1]:
-                        #print(req.ipha[1] + " " + run_ipha)
-                        for addr in req.ipha[1]:
-                            print(str(addr) + " " + str(run_ipha))
-                            if str(addr) in run_ipha:
-                                print(str(addr) + " " + str(run_ipha))
-                                print("Success")
-
+                correct_vrf.append(vrf[1])            
 
     for vrf in wrong_vrf:
         for cvrf in correct_vrf:
@@ -322,7 +309,25 @@ def analyseConfig(req, host):
     for i in range(len(wrong_vrf)):
         print("Vlan " + wrong_vlan[i] + " Has wrong vrf (" + wrong_vrf[i] + ")")
 
-    
+    # Check IP Helper Addresses
+    for vlan in correct_vlan:
+        for svi in host.SVIs:
+            for ipha in svi.IPHelperAddr:
+                for i in range(len(req.ipha[1])):
+                    ipha2 = req.ipha[i][1]
+                    for ip in ipha2:
+                        #print(vlan)
+                        #print(req.vrfs[0][0])
+                        if vlan == req.ipha[i][0]:
+                            print("ipha2: " + str(ipha2))
+                            print("ipha: " + ipha)
+                            if ip in ipha:
+                                print("Success")
+                                print("Found IPHA: " + ip)
+                            else:
+                                print("Missing IPHA: " + ip)
+        
+
     # Check bad-addresses
 
     for ba in req.badAddresses:
