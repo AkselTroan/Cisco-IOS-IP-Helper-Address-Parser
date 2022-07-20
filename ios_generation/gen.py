@@ -1,6 +1,9 @@
 import pandas as pd
+is_first = True
+
 
 def remove_bad_addr(hostname, interface, bad_addr):
+    global is_first
     '''
     Should be called when all bad addresses for a router has been 
     assembled. Only run this function once per router
@@ -29,18 +32,18 @@ def remove_bad_addr(hostname, interface, bad_addr):
             config.append("!")
             for line in config:
                 print(line)
-
+            
+    return config
 
 def generateNewConfig():
-    df = pd.read_excel("./test.xlsx", index_col=0)
-
-    print("Generate new config")
+    df = pd.read_excel("./running-config.xlsx", index_col=0)
 
     bad_add = {"Hostname": [],
             "Interface": [],
             "bad_addr": []}
 
     
+    config = []
     # iterate through each row and select
     for ind in df.index:
         host = ""
@@ -60,4 +63,8 @@ def generateNewConfig():
             bad_add['Hostname'] = host
             bad_add['Interface'] = interface
             bad_add['bad_addr'] = addr
-            remove_bad_addr(bad_add['Hostname'], bad_add['Interface'], bad_add['bad_addr'])
+            config.append(remove_bad_addr(bad_add['Hostname'], bad_add['Interface'], bad_add['bad_addr']))
+        
+    new_df = pd.DataFrame(config)
+
+    new_df.to_excel("./new-config.xlsx")

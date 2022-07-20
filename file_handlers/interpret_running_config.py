@@ -1,3 +1,4 @@
+from netaddr import *
 from init.svi import SVI
 
 def interpretRunningConfig(parse, bad_addr):
@@ -9,7 +10,7 @@ def interpretRunningConfig(parse, bad_addr):
     global_obj = parse.find_objects(r'^hostname')[0]
     hostname = global_obj.re_match_typed(r'^hostname\s+(\S+)', default='__no_hostname__')
 
-    for intf_obj in parse.find_objects('^interface\s.+'):  # Find all every parent which starts with interface .
+    for intf_obj in parse.find_objects('^interface\s.+'):  # Find all every parent which starts with interface
         intf_name = intf_obj.re_match_typed('^interface\s+(\S.+?)$')
         svi = SVI(hostname, intf_name) # Declaring a SVI object
 
@@ -50,3 +51,62 @@ def interpretRunningConfig(parse, bad_addr):
 
     return a_hostname, a_svi, a_vrf, a_ipha, a_status
 
+
+def find_big_networks(parse):
+    '''
+    Find all networks with mask which has not /32-26
+    '''
+
+    a_hostname = []
+    a_intf = []
+    a_desc = []
+    a_network = []
+
+    global_obj = parse.find_objects(r'^hostname')[0]
+    hostname = global_obj.re_match_typed(r'^hostname\s+(\S+)', default='__no_hostname__')
+    
+    banned_subnet = ["/32", "/31", "/30", "/29", "/28", "/27", "/26"]
+    
+    for intf_obj in parse.find_objects('^interface\s.+'):  # Find all every parent which starts with interface
+        intf_name = intf_obj.re_match_typed('^interface\s+(\S.+?)$')
+        no_IP = True
+        no_desc = True
+        for child in intf_obj.children:
+            desc = child.re_match_typed(
+                'description\s(.+)', result_type=str, default="No description"
+            )
+            if desc != "No description":
+                print("Description: " + desc)
+                no_desc = False
+            else:
+                pass
+
+            ip_addr = child.re_match_typed(
+                'ip\saddress\s(.+)', result_type=str, default="Found no IP"
+            )
+            if ip_addr != "Found no IP":
+                tmp_ip = ip_addr.split(" ")
+                subnet_mask = "/" + str(IPAddress(tmp_ip[1]).netmask_bits())
+                if subnet_mask in banned_subnet:
+                    no_IP = False
+                else:
+                    ip = str(tmp_ip[0]) + subnet_mask
+                    #print(hostname + " " + intf_name + ": " + ip)
+                    no_IP = False
+
+        print(desc)
+        if no_IP:
+            a_hostname.append(hostname)
+            a_intf.append(intf_name)
+            a_desc.append(desc)
+            a_network.append("None")
+        else:
+            a_hostname.append(hostname)
+            a_intf.append(intf_name)
+            a_desc.append(desc)
+            #a_network.append(ip)
+        if no_IP:
+            print(hostname + "\nInterface: " + intf_name + "\nDescription: " + desc + "\nNetwork: None")
+
+        #print(hostname + "\nInterface: " + intf_name + "\nDescription: " + desc + "\nNetwork: " + ip)
+        print("\n")
