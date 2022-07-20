@@ -24,8 +24,8 @@ def interpretAndSave():
         di['IPHA'] = di['IPHA'] + ipha
         di['Status'] = di['Status'] + status 
 
-    test = pd.DataFrame(di)
+    df = pd.DataFrame(di)
 
-    test.to_excel("./test.xlsx", sheet_name="Javel")
-    print(test)
+    df.to_excel("./test.xlsx", sheet_name="Javel")
+    #print(df)
 

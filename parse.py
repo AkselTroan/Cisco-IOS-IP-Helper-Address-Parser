@@ -1,4 +1,5 @@
 from file_handlers.pan import interpretAndSave
+from ios_generation.gen import generateNewConfig
 import time
 
 
@@ -9,6 +10,10 @@ def main():
 
     interpretAndSave()
 
+
+    # Next To Do: Analyze the file and generate config
+    generateNewConfig()
+    
     # Stop timer
     stop = time.perf_counter()
 

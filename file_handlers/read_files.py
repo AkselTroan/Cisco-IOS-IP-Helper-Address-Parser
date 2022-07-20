@@ -1,4 +1,6 @@
 from ciscoconfparse import CiscoConfParse
+
+
 def read_bad_addresses():  
     file = open("./bad-addresses", "r")
     content_list = file.readlines()  

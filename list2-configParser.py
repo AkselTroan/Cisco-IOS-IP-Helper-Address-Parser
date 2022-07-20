@@ -2,8 +2,6 @@
 from ciscoconfparse import CiscoConfParse
 import time, sys, os, csv
 
-from pkg_resources import working_set
-
 
 class colors:
     HEADER = '\033[95m'

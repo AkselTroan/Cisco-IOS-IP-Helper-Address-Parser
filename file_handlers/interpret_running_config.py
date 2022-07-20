@@ -6,7 +6,6 @@ def interpretRunningConfig(parse, bad_addr):
     a_vrf = []
     a_ipha = []
     a_status = []
-    running_SVIs = []
     global_obj = parse.find_objects(r'^hostname')[0]
     hostname = global_obj.re_match_typed(r'^hostname\s+(\S+)', default='__no_hostname__')
 
